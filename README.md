@@ -1,4 +1,4 @@
-## [Bisect](#)
+### [Bisect](#)
 
 Bisection algorithms ported from Python.
 
