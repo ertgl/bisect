@@ -1,65 +1,93 @@
 defmodule Bisect.Mixfile do
+  use Mix.Project
 
-	use Mix.Project
+  @version "0.2.0"
 
-	def project() do
-		[
-			name: "Bisect",
-			source_url: "https://github.com/ertgl/bisect",
-			description: description(),
-			package: package(),
-			app: :bisect,
-			version: "0.1.0",
-			elixir: "~> 1.5",
-			start_permanent: Mix.env() == :prod,
-			deps: deps(),
-			docs: [
-				main: "Bisect",
-			],
-		]
-	end
+  @description """
+  Bisection algorithms.
+  """
 
-	def description() do
-		"""
-		Bisection algorithms ported from Python.
-		"""
-	end
+  @source_url "https://github.com/ertgl/bisect"
 
-	def package() do
-		[
-			name: :bisect,
-			files: [
-				"lib",
-				"mix.exs",
-				"README.md",
-				"LICENSE.txt",
-			],
-			maintainers: [
-				"Ertugrul Keremoglu <ertugkeremoglu@gmail.com>",
-			],
-			licenses: [
-				"MIT",
-			],
-			links: %{
-				"GitHub" => "https://github.com/ertgl/bisect",
-			},
-		]
-	end
+  def version() do
+    @version
+  end
 
-	# Run "mix help compile.app" to learn about applications.
-	def application() do
-		[
-			extra_applications: [
-				:logger,
-			],
-		]
-	end
+  def description() do
+    @description
+  end
 
-	# Run "mix help deps" to learn about dependencies.
-	defp deps() do
-		[
-			{:ex_doc, "~> 0.16", only: :dev, runtime: false},
-		]
-	end
+  def source_url() do
+    @source_url
+  end
 
+  def project do
+    [
+      app: :bisect,
+      version: version(),
+      description: description(),
+      source_url: source_url(),
+      package: package(),
+      docs: docs(),
+      preferred_cli_env: preferred_cli_env(),
+      elixir: "~> 1.10",
+      start_permanent: Mix.env() == :prod,
+      deps: deps()
+    ]
+  end
+
+  # Run "mix help compile.app" to learn about applications.
+  def application() do
+    [
+      extra_applications: [
+        :logger
+      ]
+    ]
+  end
+
+  def package() do
+    [
+      maintainers: [
+        "Ertuğrul Noyan Keremoğlu <ertugkeremoglu@gmail.com>"
+      ],
+      licenses: [
+        "MIT"
+      ],
+      links: %{
+        "GitHub" => source_url()
+      },
+      files: [
+        "lib",
+        "mix.exs",
+        "README.md",
+        ".formatter.exs"
+      ]
+    ]
+  end
+
+  def docs() do
+    [
+      name: "Bisect",
+      main: "Bisect",
+      source_url: source_url(),
+      source_ref: "v#{@version}",
+      formatters: [
+        "html",
+        "epub"
+      ]
+    ]
+  end
+
+  def preferred_cli_env() do
+    [
+      docs: :docs
+    ]
+  end
+
+  # Run "mix help deps" to learn about dependencies.
+  defp deps() do
+    [
+      {:ex_doc, "~> 0.22.1", optional: true, only: :docs}
+    ]
+  end
 end

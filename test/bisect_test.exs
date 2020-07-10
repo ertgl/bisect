@@ -1,7 +1,6 @@
-defmodule BisectTest do
+defmodule Bisect.Test do
+  use ExUnit.Case
 
-	use ExUnit.Case
-
-	doctest Bisect
-
+  doctest Bisect,
+    async: true
 end

@@ -1,291 +1,204 @@
 defmodule Bisect do
-	@moduledoc """
-	Bisection algorithms ported from Python.
+  @moduledoc File.read!("README.md")
 
-	[![Hex Version](https://img.shields.io/hexpm/v/bisect.svg?style=flat-square)](https://hex.pm/packages/bisect) [![Docs](https://img.shields.io/badge/api-docs-orange.svg?style=flat-square)](https://hexdocs.pm/bisect) [![Hex downloads](https://img.shields.io/hexpm/dt/bisect.svg?style=flat-square)](https://hex.pm/packages/bisect) [![GitHub](https://img.shields.io/badge/vcs-GitHub-blue.svg?style=flat-square)](https://github.com/ertgl/bisect) [![MIT License](https://img.shields.io/hexpm/l/bisect.svg?style=flat-square)](LICENSE.txt)
+  import Bitwise,
+    only: [
+      >>>: 2
+    ]
 
-	Source: <a href="https://github.com/python/cpython/blob/3.6/Lib/bisect.py" target="_blank">
-		cpython/Lib/bisect.py
-	</a>
-	"""
+  @doc ~S"""
+  Executes binary search in list `enumerable` by passing list elements
+  to the `function` for comparison, assuming the list is sorted.
 
-	@doc """
-	Return the index where to insert item x in list a, assuming a is sorted.
-	The return value i is such that all e in a[:i] have e < x, and all e in
-	a[i:] have e >= x.  So if x already appears in the list, a.insert(x) will
-	insert just before the leftmost x already there.
-	Optional keywords :lo (default 0) and :hi (default len(a)) bound the
-	slice of a to be searched.
+  ### Options
 
-	## Examples
+    - `access_keys`: Specifies path of value in `term`,
+    to be passed to the `function` for comparison.
 
-		iex> Bisect.bisect_left([1, 2], 1)
-		0
+    See `Kernel.get_in/2` function and `Access.fetch/2` callback
+    for more information about access keys.
 
-		iex> Bisect.bisect_left([1, 2], 2)
-		1
+  ### Examples
 
-		iex> Bisect.bisect_left([1, 2], 4)
-		2
+      iex> Bisect.binary_search([1, 2], fn term ->
+      ...>   term >= 1
+      ...> end)
+      0
 
-	"""
-    def bisect_left(a, x, opts \\ [])
-	when is_list(a) do
-        lo = Keyword.get(opts, :lo, 0)
-        hi = Keyword.get(opts, :hi, nil)
-        {_a, _x, lo, _hi} = do_bisect_left(a, x, lo, hi)
-        lo
+      iex> Bisect.binary_search([1, 2], fn term ->
+      ...>   term > 1
+      ...> end)
+      1
+
+      iex> Bisect.binary_search([2, 1], fn term ->
+      ...>   term < 0
+      ...> end)
+      2
+
+      iex> Bisect.binary_search([%{value: 1}, %{value: 2}], fn term ->
+      ...>   term > 1
+      ...> end, access_keys: [:value])
+      1
+
+  """
+  @doc since: "0.2.0"
+  @spec binary_search(Enum.t(), (term -> boolean), keyword) :: non_neg_integer
+  def binary_search(enumerable, function, opts \\ []) do
+    do_binary_search(enumerable, function, 0, length(enumerable), opts)
+  end
+
+  defp do_binary_search(enumerable, function, low, high, opts)
+       when low < high do
+    middle = (low + high) >>> 0x1
+    element = Enum.at(enumerable, middle)
+
+    case apply_traversal(function, element, opts[:access_keys]) do
+      true ->
+        do_binary_search(enumerable, function, low, middle, opts)
+
+      false ->
+        do_binary_search(enumerable, function, middle + 1, high, opts)
     end
+  end
 
-    @doc false
-    defp do_bisect_left(_a, _x, lo, _hi)
-    when is_integer(lo) == false do
-        {:error, "lo must be positive integer"}
-    end
+  defp do_binary_search(_enumerable, _function, low, _high, _opts) do
+    low
+  end
 
-    @doc false
-    defp do_bisect_left(_a, _x, lo, _hi)
-    when lo < 0 do
-        {:error, "lo must be positive integer"}
-    end
+  defp apply_traversal(function, element, access_keys) do
+    apply(function, [access_value(element, access_keys)])
+  end
 
-    @doc false
-    defp do_bisect_left(a, x, lo, hi)
-    when is_nil(hi) do
-        do_bisect_left(a, x, lo, length(a))
-    end
+  defp access_value(element, access_keys)
+       when access_keys in [nil, []] do
+    element
+  end
 
-    @doc false
-    defp do_bisect_left(_a, _x, _lo, hi)
-    when is_integer(hi) == false do
-        {:error, "hi must be integer"}
-    end
+  defp access_value(element, access_keys) do
+    get_in(element, access_keys)
+  end
 
-    @doc false
-    defp do_bisect_left(a, x, lo, hi)
-	when (lo < hi) == true
-    do
-		mid = div((lo + hi), 2)
-		{timely_lo, timely_hi} = case Enum.at(a, mid) < x do
-			true ->
-				{mid + 1, hi}
-			false ->
-				{lo, mid}
-		end
-        do_bisect_left(a, x, timely_lo, timely_hi)
-    end
+  @doc ~S"""
+  Returns the leftmost index where to insert `term` in list `enumerable`,
+  assuming the list is sorted.
 
-	@doc false
-    defp do_bisect_left(a, x, lo, hi)
-	when (lo < hi) == false
-    do
-        {a, x, lo, hi}
-    end
+  ### Examples
 
-	@doc """
-	Return the index where to insert item x in list a, assuming a is sorted.
-	The return value i is such that all e in a[:i] have e <= x, and all e in
-	a[i:] have e > x.  So if x already appears in the list, a.insert(x) will
-	insert just after the rightmost x already there.
-	Optional keywords :lo (default 0) and :hi (default len(a)) bound the
-	slice of a to be searched.
+      iex> Bisect.bisect_left([1, 2], 1)
+      0
 
-	## Examples
+      iex> Bisect.bisect_left([1, 2], 2)
+      1
 
-		iex> Bisect.bisect_right([1, 2], 1)
-		1
+      iex> Bisect.bisect_left([1, 2], 4)
+      2
 
-		iex> Bisect.bisect_right([1, 2, 3], 4)
-		3
+  See `Bisect.binary_search/3` for options.
 
-	"""
-    def bisect_right(a, x, opts \\ [])
-	when is_list(a) do
-        lo = Keyword.get(opts, :lo, 0)
-        hi = Keyword.get(opts, :hi, nil)
-        {_a, _x, lo, _hi} = do_bisect_right(a, x, lo, hi)
-        lo
-    end
+  """
+  @doc since: "0.1.0"
+  @spec bisect_left(Enum.t(), term, keyword) :: non_neg_integer
+  def bisect_left(enumerable, term, opts \\ []) do
+    access_keys = opts[:access_keys]
 
-    @doc false
-    defp do_bisect_right(_a, _x, lo, _hi)
-    when is_integer(lo) == false do
-        {:error, "lo must be positive integer"}
-    end
+    binary_search(
+      enumerable,
+      fn element ->
+        element >= access_value(term, access_keys)
+      end,
+      opts
+    )
+  end
 
-    @doc false
-    defp do_bisect_right(_a, _x, lo, _hi)
-    when lo < 0 do
-        {:error, "lo must be positive integer"}
-    end
+  @doc ~S"""
+  Returns the rightmost index where to insert `term` in list `enumerable`,
+  assuming the list is sorted.
 
-    @doc false
-    defp do_bisect_right(a, x, lo, hi)
-    when is_nil(hi) do
-        do_bisect_right(a, x, lo, length(a))
-    end
+  ### Examples
 
-    @doc false
-    defp do_bisect_right(_a, _x, _lo, hi)
-    when is_integer(hi) == false do
-        {:error, "hi must be integer"}
-    end
+      iex> Bisect.bisect_right([1, 2], 1)
+      1
 
-    @doc false
-    defp do_bisect_right(a, x, lo, hi)
-	when (lo < hi) == true
-    do
-		mid = div((lo + hi), 2)
-		{timely_lo, timely_hi} = case x < Enum.at(a, mid) do
-			true ->
-				{lo, mid}
-			false ->
-				{mid + 1, hi}
-		end
-        do_bisect_right(a, x, timely_lo, timely_hi)
-    end
+      iex> Bisect.bisect_right([1, 2, 2, 4], 4)
+      4
 
-	@doc false
-    defp do_bisect_right(a, x, lo, hi)
-	when (lo < hi) == false
-    do
-        {a, x, lo, hi}
-    end
+      iex> Bisect.bisect_right([2, 4], 0)
+      0
 
-	@doc """
-	Insert item x in list a, and keep it sorted assuming a is sorted.
-	If x is already in a, insert it to the left of the leftmost x.
-	Optional keywords :lo (default 0) and :hi (default len(a)) bound the
-	slice of a to be searched.
+  See `Bisect.binary_search/3` for options.
 
-	## Examples
+  """
+  @doc since: "0.1.0"
+  @spec bisect_right(Enum.t(), term, keyword) :: non_neg_integer
+  def bisect_right(enumerable, term, opts \\ []) do
+    access_keys = opts[:access_keys]
 
-		iex> Bisect.insort_left([1, 2, 3], 4)
-		[1, 2, 3, 4]
+    binary_search(
+      enumerable,
+      fn element ->
+        element > access_value(term, access_keys)
+      end,
+      opts
+    )
+  end
 
-		iex> Bisect.insort_left([2, 3, 4], 1)
-		[1, 2, 3, 4]
+  @doc ~S"""
+  Inserts `term` into list `enumerable`, and keeps it sorted
+  assuming the list is already sorted.
 
-	"""
-    def insort_left(a, x, opts \\ [])
-	when is_list(a) do
-        lo = Keyword.get(opts, :lo, 0)
-        hi = Keyword.get(opts, :hi, nil)
-        {a, _x, _lo, _hi} = do_insort_left(a, x, lo, hi)
-        a
-    end
+  If `term` is already in `enumerable`, inserts it to the left of the leftmost `term`.
 
-    @doc false
-    defp do_insort_left(_a, _x, lo, _hi)
-    when is_integer(lo) == false do
-        {:error, "lo must be positive integer"}
-    end
+  ### Examples
 
-    @doc false
-    defp do_insort_left(_a, _x, lo, _hi)
-    when lo < 0 do
-        {:error, "lo must be positive integer"}
-    end
+      iex> Bisect.insort_left([1, 2], 1)
+      [1, 1, 2]
 
-    @doc false
-    defp do_insort_left(a, x, lo, hi)
-    when is_nil(hi) do
-        do_insort_left(a, x, lo, length(a))
-    end
+      iex> Bisect.insort_left([1, 2, 2, 4], 4)
+      [1, 2, 2, 4, 4]
 
-    @doc false
-    defp do_insort_left(_a, _x, _lo, hi)
-    when is_integer(hi) == false do
-        {:error, "hi must be integer"}
-    end
+      iex> Bisect.insort_left([2, 4], 0)
+      [0, 2, 4]
 
-    @doc false
-    defp do_insort_left(a, x, lo, hi)
-	when (lo < hi) == true
-    do
-		mid = div((lo + hi), 2)
-		{timely_lo, timely_hi} = case Enum.at(a, mid) < x do
-			true ->
-				{mid + 1, hi}
-			false ->
-				{lo, mid}
-		end
-        do_insort_left(a, x, timely_lo, timely_hi)
-    end
+      iex> Bisect.insort_left([%{value: 2}, %{value: 4}], %{value: 0}, access_keys: [:value])
+      [%{value: 0}, %{value: 2}, %{value: 4}]
 
-	@doc false
-    defp do_insort_left(a, x, lo, hi)
-	when (lo < hi) == false
-    do
-        {List.insert_at(a, lo, x), x, lo, hi}
-    end
+  See `Bisect.binary_search/3` for options.
 
-	@doc """
-	Insert item x in list a, and keep it sorted assuming a is sorted.
-	If x is already in a, insert it to the right of the rightmost x.
-	Optional keywords :lo (default 0) and :hi (default length(a)) bound the
-	slice of a to be searched.
+  """
+  @doc since: "0.1.0"
+  @spec insort_left(Enum.t(), term, keyword) :: Enum.t()
+  def insort_left(enumerable, term, opts \\ []) do
+    index = bisect_left(enumerable, term, opts)
+    List.insert_at(enumerable, index, term)
+  end
 
-	## Examples
+  @doc ~S"""
+  Inserts `term` into list `enumerable`, and keeps it sorte
+  assuming the list is already sorted.
 
-		iex> Bisect.insort_right([1, 2], 3)
-		[1, 2, 3]
+  If `term` is already in `enumerable`, inserts it to the right of the rightmost `term`.
 
-		iex> Bisect.insort_right([1, 2, 3], 0)
-		[0, 1, 2, 3]
+  ### Examples
 
-	"""
-    def insort_right(a, x, opts \\ [])
-	when is_list(a) do
-        lo = Keyword.get(opts, :lo, 0)
-        hi = Keyword.get(opts, :hi, nil)
-        {a, _x, _lo, _hi} = do_insort_right(a, x, lo, hi)
-        a
-    end
+      iex> Bisect.insort_right([1, 2], 1)
+      [1, 1, 2]
 
-    @doc false
-    defp do_insort_right(_a, _x, lo, _hi)
-    when is_integer(lo) == false do
-        {:error, "lo must be positive integer"}
-    end
+      iex> Bisect.insort_right([1, 2, 2, 4], 4)
+      [1, 2, 2, 4, 4]
 
-    @doc false
-    defp do_insort_right(_a, _x, lo, _hi)
-    when lo < 0 do
-        {:error, "lo must be positive integer"}
-    end
+      iex> Bisect.insort_right([2, 4], 0)
+      [0, 2, 4]
 
-    @doc false
-    defp do_insort_right(a, x, lo, hi)
-    when is_nil(hi) do
-        do_insort_right(a, x, lo, length(a))
-    end
+      iex> Bisect.insort_right([%{value: 2}, %{value: 4}], %{value: 0}, access_keys: [:value])
+      [%{value: 0}, %{value: 2}, %{value: 4}]
 
-    @doc false
-    defp do_insort_right(_a, _x, _lo, hi)
-    when is_integer(hi) == false do
-        {:error, "hi must be integer"}
-    end
+  See `Bisect.binary_search/3` for options.
 
-    @doc false
-    defp do_insort_right(a, x, lo, hi)
-	when (lo < hi) == true
-    do
-		mid = div((lo + hi), 2)
-		{timely_lo, timely_hi} = case x < Enum.at(a, mid) do
-			true ->
-				{lo, mid}
-			false ->
-				{mid + 1, hi}
-		end
-        do_insort_right(a, x, timely_lo, timely_hi)
-    end
-
-	@doc false
-    defp do_insort_right(a, x, lo, hi)
-	when (lo < hi) == false
-    do
-        {List.insert_at(a, lo, x), x, lo, hi}
-    end
-
+  """
+  @doc since: "0.1.0"
+  @spec insort_right(Enum.t(), term, keyword) :: Enum.t()
+  def insort_right(enumerable, term, opts \\ []) do
+    index = bisect_right(enumerable, term, opts)
+    List.insert_at(enumerable, index, term)
+  end
 end
