@@ -6,76 +6,102 @@ defmodule Bisect do
       >>>: 2
     ]
 
+  defp extract_key(:lhs, opts) do
+    key = opts[:key]
+    opts[:lhs_key] || key
+  end
+
+  defp extract_key(:rhs, opts) do
+    key = opts[:key]
+    opts[:rhs_key] || key
+  end
+
+  defp access_value(term, key)
+       when key in [nil, []] do
+    term
+  end
+
+  defp access_value(term, key)
+       when not is_list(key) do
+    access_value(term, [key])
+  end
+
+  defp access_value(term, key) do
+    get_in(term, key)
+  end
+
   @doc ~S"""
   Executes binary search in list `enumerable` by passing list elements
   to the `function` for comparison, assuming the list is sorted.
 
   ### Options
 
-    - `access_keys`: Specifies path of value in `term`,
-    to be passed to the `function` for comparison.
+    - `key` or `lhs_key`: Path of the value to be compared,
+    by being passed to `function` while iteration.
 
-    See `Kernel.get_in/2` function and `Access.fetch/2` callback
-    for more information about access keys.
+    See `Kernel.get_in/2`
 
   ### Examples
 
-      iex> Bisect.binary_search([1, 2], fn term ->
-      ...>   term >= 1
-      ...> end)
-      0
-
-      iex> Bisect.binary_search([1, 2], fn term ->
-      ...>   term > 1
-      ...> end)
-      1
-
-      iex> Bisect.binary_search([2, 1], fn term ->
-      ...>   term < 0
+      iex> Bisect.search([1, 2, 4], fn x ->
+      ...>   x == 4
       ...> end)
       2
 
-      iex> Bisect.binary_search([%{value: 1}, %{value: 2}], fn term ->
-      ...>   term > 1
-      ...> end, access_keys: [:value])
+      iex> Bisect.search([1, 2, 4, 8], fn x ->
+      ...>   x == 7
+      ...> end)
+      4
+
+      iex> Bisect.search([1, 2], fn x ->
+      ...>   x >= 1
+      ...> end)
+      0
+
+      iex> Bisect.search([1, 2], fn x ->
+      ...>   x > 1
+      ...> end)
+      1
+
+      iex> Bisect.search([2, 1], fn x ->
+      ...>   x < 0
+      ...> end)
+      2
+
+      iex> Bisect.search(
+      ...>   [%{value: 1}, %{value: 2}],
+      ...>   fn x ->
+      ...>     x > 1
+      ...>   end,
+      ...>   lhs_key: [:value]
+      ...> )
       1
 
   """
-  @doc since: "0.2.0"
-  @spec binary_search(Enum.t(), (term -> boolean), keyword) :: non_neg_integer
-  def binary_search(enumerable, function, opts \\ []) do
-    do_binary_search(enumerable, function, 0, length(enumerable), opts)
+  @doc since: "0.4.0"
+  @spec search(Enum.t(), (term -> boolean), keyword) :: non_neg_integer
+  def search(enumerable, function, opts \\ []) do
+    do_search(enumerable, function, 0, length(enumerable), opts)
   end
 
-  defp do_binary_search(enumerable, function, low, high, opts)
+  defp do_search(enumerable, function, low, high, opts)
        when low < high do
     middle = (low + high) >>> 0x1
-    element = Enum.at(enumerable, middle)
+    lhs = Enum.at(enumerable, middle)
+    lhs_key = extract_key(:lhs, opts)
+    lhs_value = access_value(lhs, lhs_key)
 
-    case apply_traversal(function, element, opts[:access_keys]) do
+    case apply(function, [lhs_value]) do
       true ->
-        do_binary_search(enumerable, function, low, middle, opts)
+        do_search(enumerable, function, low, middle, opts)
 
       false ->
-        do_binary_search(enumerable, function, middle + 1, high, opts)
+        do_search(enumerable, function, middle + 1, high, opts)
     end
   end
 
-  defp do_binary_search(_enumerable, _function, low, _high, _opts) do
+  defp do_search(_enumerable, _function, low, _high, _opts) do
     low
-  end
-
-  defp apply_traversal(function, element, access_keys) do
-    apply(function, [access_value(element, access_keys)])
-  end
-
-  defp access_value(element, access_keys)
-       when access_keys in [nil, []] do
-    element
-  end
-
-  defp access_value(element, access_keys) do
-    get_in(element, access_keys)
   end
 
   @doc ~S"""
@@ -93,18 +119,25 @@ defmodule Bisect do
       iex> Bisect.bisect_left([1, 2], 4)
       2
 
-  See `Bisect.binary_search/3` for options.
+  ### Options
+
+    - `rhs_key`: Path of the value of `term` to be compared.
+
+    See `Kernel.get_in/2`
+
+  See `Bisect.search/3` for more options.
 
   """
   @doc since: "0.1.0"
   @spec bisect_left(Enum.t(), term, keyword) :: non_neg_integer
   def bisect_left(enumerable, term, opts \\ []) do
-    access_keys = opts[:access_keys]
+    rhs_key = extract_key(:rhs, opts)
+    rhs_value = access_value(term, rhs_key)
 
-    binary_search(
+    search(
       enumerable,
-      fn element ->
-        element >= access_value(term, access_keys)
+      fn x ->
+        x >= rhs_value
       end,
       opts
     )
@@ -125,18 +158,25 @@ defmodule Bisect do
       iex> Bisect.bisect_right([2, 4], 0)
       0
 
-  See `Bisect.binary_search/3` for options.
+  ### Options
+
+    - `rhs_key`: Path of the value of `term` to be compared.
+
+    See `Kernel.get_in/2`
+
+  See `Bisect.search/3` for more options.
 
   """
   @doc since: "0.1.0"
   @spec bisect_right(Enum.t(), term, keyword) :: non_neg_integer
   def bisect_right(enumerable, term, opts \\ []) do
-    access_keys = opts[:access_keys]
+    rhs_key = extract_key(:rhs, opts)
+    rhs_value = access_value(term, rhs_key)
 
-    binary_search(
+    search(
       enumerable,
-      fn element ->
-        element > access_value(term, access_keys)
+      fn x ->
+        x > rhs_value
       end,
       opts
     )
@@ -159,10 +199,16 @@ defmodule Bisect do
       iex> Bisect.insort_left([2, 4], 0)
       [0, 2, 4]
 
-      iex> Bisect.insort_left([%{value: 2}, %{value: 4}], %{value: 0}, access_keys: [:value])
+      iex> Bisect.insort_left(
+      ...>   [%{value: 2}, %{value: 4}],
+      ...>   %{value: 0},
+      ...>   key: [:value]
+      ...> )
       [%{value: 0}, %{value: 2}, %{value: 4}]
 
-  See `Bisect.binary_search/3` for options.
+  ### Options
+
+  See `Bisect.bisect_left/3`
 
   """
   @doc since: "0.1.0"
@@ -189,10 +235,16 @@ defmodule Bisect do
       iex> Bisect.insort_right([2, 4], 0)
       [0, 2, 4]
 
-      iex> Bisect.insort_right([%{value: 2}, %{value: 4}], %{value: 0}, access_keys: [:value])
+      iex> Bisect.insort_right(
+      ...>   [%{value: 2}, %{value: 4}],
+      ...>   %{value: 0},
+      ...>   key: [:value]
+      ...> )
       [%{value: 0}, %{value: 2}, %{value: 4}]
 
-  See `Bisect.binary_search/3` for options.
+  ### Options
+
+  See `Bisect.bisect_right/3`
 
   """
   @doc since: "0.1.0"

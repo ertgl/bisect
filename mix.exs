@@ -1,7 +1,7 @@
 defmodule Bisect.Mixfile do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.4.0"
 
   @description """
   Bisection algorithms.
